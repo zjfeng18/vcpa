@@ -37,7 +37,7 @@ class Getshow(object):
         return self.dom('.author-name img').attr('src')
     #微信号
     @property
-    def wxid(self):
+    def wxh(self):
         wxlmurl = self.dom('.author-name a').attr('href')#vccoo公众号栏目页
         document = requests.get(wxlmurl)
         document.encoding = 'utf-8'
@@ -74,62 +74,129 @@ class Getshow(object):
 
         # 入库
     def save(self,tocatid):
-        database=Mysql(host="121.199.48.195", user="root", pwd="rajltool123", db="test")
-        sDir='d:/test/'
+        self.database=Mysql(host="121.199.48.195", user="root", pwd="rajltool123", db="test")
+        self.tocatid=tocatid
+        sDir = 'd:/test/'
         #图片地址
         img_dir = 'img'
         if os.path.exists(sDir)==False:
             os.mkdir(sDir)
         # sName = sDir+str(int(time.time()))+'.txt'
         print('正在采集--'+self.title+'--文章')
+        #公众号入库
+        isexist = ""
+        self.wxid = 0
+        try:
+            isexist = database.ExecQuery("select id from v9_weixinhao where weixinID='"+self.wxh+"'")
+        except Exception as e:
+            print(e)
+            pass
+        if isexist:
+            print("公众号-----> 有重复不提交！")
+            self.wxid = isexist[0][0]
+        else:#入库并返回id
+            self.wxid = self.addwx()
+
         title = self.title
-        if title.strip()=='':
-            print("标题为空,不采集！")
+        if (title.strip()==''or self.wxid==0):
+            print("标题或微信ID为空,不采集！")
             return
         isexist1=""
         try:
-            isexist1 = database.ExecQuery("select * from v9_news where title='"+title+"'")
+            isexist1 = self.database.ExecQuery("select * from v9_news where title='"+title+"'")
         except Exception as e:
             print(e)
             pass
         if isexist1:
             print(title+'-----> 有重复不提交！')
         else:#无相关记录时提交数据
+            self.addnews()
 
-            #批量替换旧内容中的图片的路径
-            # img_patt = re.compile('src=".*?/(\w+\.\w+)"')
-            # new_m = img_patt.sub(r'src="./%s/\1"'%img_dir,m)
-            content=self.content
-            catid=tocatid #保存到的栏目
-            typeid=0
-            tags=jieba.analyse.extract_tags(title, 6)
-            keywords=(",".join(tags))
-            description=Pq(self.content).text()[0:200]
-            url=''
-            listorder=0
-            status=99
-            username='admin'
-            inputtime=updatetime=int(time.time())
-            insertbooksql ="insert into v9_news (title,catid,typeid,keywords,description,url,listorder,status,username,inputtime,updatetime) VALUES ('" \
-							"{title}', {catid}, {typeid}, '{keywords}', '{description}', '{url}', {listorder}, {status}, '{username}', '{inputtime}', '{updatetime}')"
-            insert1 = insertbooksql.format(title=title, catid=catid, typeid=typeid, keywords=keywords, description=description,url=url,listorder=listorder,status=status,username=username,inputtime=inputtime,updatetime=updatetime)
-            print(insert1)
-            try:
-                database.ExecNonQuery(insert1)
-                lastid=database.cur.lastrowid
-                paginationtype = 2
-                groupids_view = ""
-                maxcharperpage = 0
-                template = ""
-                insertbooksql ="insert into v9_news_data (id,content,paginationtype,groupids_view,maxcharperpage,template) VALUES ({lastid}, '{content}', {paginationtype},'{groupids_view}',{maxcharperpage},'{template}')"
-                insert2 = insertbooksql.format(lastid=lastid, content=content, paginationtype=paginationtype,groupids_view=groupids_view,maxcharperpage=maxcharperpage,template=template)
-                print(insert2)
-                database.ExecNonQuery(insert2)
 
-            except Exception as e:
-                print("文章数据库保存出错，错误信息：%s" % (e) )
-                pass
+     # 公众号入库
+    def addwx(self):
+        title = self.wxname
+        catid=10 #保存到的栏目
+        typeid=0
+        tags=jieba.analyse.extract_tags(self.wxname,3)
+        keywords=(",".join(tags))
+        description=''
+        url=''
+        listorder=0
+        status=99
+        username='admin'
+        inputtime=updatetime=int(time.time())
+        insertbooksql ="insert into v9_weixinhao (title,catid,typeid,keywords,description,url,listorder,status,username,inputtime,updatetime) VALUES ( '{title}', {catid}, {typeid}, '{keywords}', '{description}', '{url}', {listorder}, {status}, '{username}', '{inputtime}', '{updatetime}')"
+        insert1 = insertbooksql.format(title=title, catid=catid, typeid=typeid, keywords=keywords, description=description,url=url,listorder=listorder,status=status,username=username,inputtime=inputtime,updatetime=updatetime)
+        print(insert1)
+        try:
+            self.database.cur.execute(insert1)
+            # 附表
+            lastid=self.database.cur.lastrowid
+            fenleiid=self.tocatid
+            weixinID=self.wxh
+            gnjs=''
+            wxrz=''
+            wxlogo=self.wxlogo #还要下载图片
+            wxepic=self.wxer
+            content=''
+            paginationtype = 2
+            groupids_view = ""
+            maxcharperpage = 0
+            template = ""
+            insertbooksql ="insert into v9_weixinhao_data (id,fenliid,weixinID,gnjs,wxrz,wxlogo,wxepic,content,paginationtype,groupids_view,maxcharperpage,template) VALUES ({lastid},{fenliid},{weixinID},'{gnjs}','{wxrz}','{wxlogo}','{wxepic}','{content}', {paginationtype},'{groupids_view}',{maxcharperpage},'{template}')"
+            insert2 = insertbooksql.format(lastid=lastid, fenliid=fenliid, weixinID=weixinID, gnjs=gnjs, wxrz=wxrz, wxlogo=wxlogo, wxepic=wxepic, content=content, paginationtype=paginationtype,groupids_view=groupids_view,maxcharperpage=maxcharperpage,template=template)
+            print(insert2)
+            self.database.cur.execute(insert2)
+            # database.cur.close()
+            self.database.conn.commit()
+            return self.database.cur.lastrowid
+            print('公众号入库成功！')
+        except Exception as e:
+            print("公众号数据库保存出错，错误信息：%s" % (e) )
+            # database.conn.close()
+            self.database.conn.rollback()
+            return 0
 
+    # 文章入库
+    def addnews(self):
+       #批量替换旧内容中的图片的路径
+        # img_patt = re.compile('src=".*?/(\w+\.\w+)"')
+        # new_m = img_patt.sub(r'src="./%s/\1"'%img_dir,m)
+        title = self.title
+        content=self.database.conn.escape(self.content) #这里对内容进行转义,提交变量时不用加'，因为后面转义过后会自动加引号
+        catid=self.tocatid #保存到的栏目
+        wxid=self.wxid
+        typeid=0
+        tags=jieba.analyse.extract_tags(self.title, 6)
+        keywords=(",".join(tags))
+        description=Pq(self.content).text()[0:200]
+        url=''
+        listorder=0
+        status=99
+        username='admin'
+        inputtime=updatetime=int(time.time())
+        insertbooksql ="insert into v9_news (title,catid,wxid,typeid,keywords,description,url,listorder,status,username,inputtime,updatetime) VALUES ( '{title}',{catid},{wxid},{typeid}, '{keywords}', '{description}', '{url}',{listorder},{status}, '{username}', '{inputtime}', '{updatetime}')"
+        insert1 = insertbooksql.format(title=title, catid=catid,wxid=wxid, typeid=typeid, keywords=keywords, description=description,url=url,listorder=listorder,status=status,username=username,inputtime=inputtime,updatetime=updatetime)
+        print(insert1)
+        try:#这是用到了事务处理
+            self.database.cur.execute(insert1)
+            lastid=self.database.cur.lastrowid
+            paginationtype = 2
+            groupids_view = ""
+            maxcharperpage = 0
+            template = ""
+            insertbooksql ="insert into v9_news_data (id,content,paginationtype,groupids_view,maxcharperpage,template) VALUES ({lastid}, {content}, {paginationtype},'{groupids_view}',{maxcharperpage},'{template}')"
+            insert2 = insertbooksql.format(lastid=lastid, content=content, paginationtype=paginationtype,groupids_view=groupids_view,maxcharperpage=maxcharperpage,template=template)
+            print(insert2)
+            self.database.cur.execute(insert2)
+            # database.cur.close()
+            self.database.conn.commit()
+            print('文章入库成功！')
+        except Exception as e:
+            print("文章数据库保存出错，错误信息：%s" % (e) )
+            # database.conn.close()
+            self.database.conn.rollback()
 
 #栏目页 http://www.vccoo.com/category/?id=104&page=2
 class Getlist(object):
@@ -177,8 +244,8 @@ class Getlist(object):
             print('此页第%d篇文章采集中' %i)
             Getshow(sf_id).save(self.tocatid)
             i+=1
-            print('休息2s采第%d篇' %i)
-            time.sleep(2)
+            print('休息3s采第%d篇' %i)
+            time.sleep(3)
 
     def crawl_all_pages(self):
         while True:
@@ -191,7 +258,7 @@ class Getlist(object):
                 self.next_page()
 
 # 测试
-# s = Getshow('3b77ac')
+# s = Getshow('324d22')
 # print(s.title)
 # print(s.content)
 # print(s.wxlogo)
@@ -206,7 +273,7 @@ class Getlist(object):
 #     print(show.title+':'+url)
 
 
-s=Getlist(104,3,2)
+s=Getlist(121,3,1,6)
 # if not s.has_next_page:
 #     print('没有下一页')
 # else:
