@@ -198,6 +198,36 @@ class Getshow(object):
             # database.conn.close()
             self.database.conn.rollback()
 
+
+    def getimg(self,imgUrl,filename,tourl):
+        if filename:
+            local_filename=filename
+        else:
+            local_filename = imgUrl.split('/')[-1]
+        print("Download Image File=", local_filename)
+        if os.path.exists(tourl)==False:
+            os.makedirs(tourl)
+
+        # 这里是cookie的模拟方法，需要模拟登录
+        # headers = {
+        # "Host": "techinfo.subaru.com",
+        # "User-Agent": "lol",
+        # "Cookie": "JSESSIONID=F3CB4654BFC47A6A8E9A1859F0445123"
+        # }
+        # r = requests.get(url, stream=True, headers=headers)
+        r = requests.get(imgUrl, stream=True) # here we need to set stream = True parameter
+        with open(tourl+local_filename, 'wb') as f:
+            try:
+                for chunk in r.iter_content(chunk_size=1024):#大图片断点续传  1024 是一个比较随意的数，表示分几个片段传输数据。
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+                        f.flush()  #刷新也很重要，实时保证一点点的写入。
+                f.close()
+            except Exception as e:
+                print("图片下载出错")
+                f.close()
+                return
+        return tourl+local_filename
 #栏目页 http://www.vccoo.com/category/?id=104&page=2
 class Getlist(object):
     #tocatid保存到的栏目id
@@ -258,27 +288,31 @@ class Getlist(object):
                 self.next_page()
 
 # 测试
-# s = Getshow('324d22')
-# print(s.title)
+s = Getshow('324d22')
+print(s.title)
 # print(s.content)
-# print(s.wxlogo)
+print(s.wxlogo)
 # print(s.wxname)
-# print(s.wxid)
+print(s.wxh)
 # # print(s.addtime)
 # print(s.wxurl)
-# print(s.wxer)
+print(s.wxer)
+
+
+print(s.getimg(s.wxlogo,s.wxh+'.png','d:/img/a/'))
+print(s.getimg(s.wxer,s.wxh+'2.png','d:/img/a/'))
 # s=Getlist(104)
 # for url in s.urls:
 #     show =Getshow(url.split('/')[-1])
 #     print(show.title+':'+url)
 
 
-s=Getlist(121,3,1,6)
-# if not s.has_next_page:
-#     print('没有下一页')
-# else:
-#     print('有下一页')
-s.crawl_all_pages()
+# s=Getlist(121,3,1,6)
+# # if not s.has_next_page:
+# #     print('没有下一页')
+# # else:
+# #     print('有下一页')
+# s.crawl_all_pages()
 
 # 还要解决：
 #1、数据库转义提交
