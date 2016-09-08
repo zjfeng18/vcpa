@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 #author:zjfeng
-import requests,time,os,re # requests作为我们的html客户端
+import requests,time,os,re,random # requests作为我们的html客户端
 from pyquery import PyQuery as Pq # pyquery来操作dom
 from tools.mysql import Mysql
 import jieba #分词并取关键词
@@ -57,6 +57,13 @@ class Getshow(object):
     def wxer(self):
         biz= self.wxurl.split("biz=")[1].split("&mid=")[0]
         return "http://mp.weixin.qq.com/mp/qrcode?scene=10000004&size=100&__biz="+biz
+
+    # <meta property="og:image" content="http://mmbiz.qpic.cn/mmbiz_jpg/3oP8LV1kURibv3LAbIkk4v6pXo6xHwZVkqibO0BSdVGicA8JHicKiaJZU3Dpga2ibwa2bEfad5PchdxXSFmxv6WkECEQ/0?wx_fmt=jpeg" />
+    # 文章缩略图
+    @property
+    def thumb(self):
+        return re.findall(r'<meta property="og:image" content="(.*?)"',self.dom('head').html())[0]
+
     # 发布时间
     @property
     def addtime(self):
@@ -74,11 +81,10 @@ class Getshow(object):
 
         # 入库
     def save(self,tocatid):
-        self.database=Mysql(host="121.199.48.195", user="root", pwd="rajltool123", db="test")
+        self.database=Mysql(host="121.41.40.189", user="najiaoluoaa", pwd="nMAf6wBCdRstaaabbb", db="najiaoluoabab")
         self.tocatid=tocatid
-        sDir = 'd:/test/'
-        #图片地址
-        img_dir = 'img'
+        self.sDir = "d:/uploadfile/"#图片本地目录
+        self.picurl = "http://imgs.najiaoluo.com/"#远程图片域名
         if os.path.exists(sDir)==False:
             os.mkdir(sDir)
         # sName = sDir+str(int(time.time()))+'.txt'
@@ -137,8 +143,9 @@ class Getshow(object):
             weixinID=self.wxh
             gnjs=''
             wxrz=''
-            wxlogo=self.wxlogo #还要下载图片
-            wxepic=self.wxer
+            ndir=time.strftime("%Y/%m%d/")
+            wxlogo=self.getimg(self.wxlogo,weixinID+"_logo.png",self.sDir+ndir,self.picurl+ndir) #下载图片
+            wxepic=self.getimg(self.wxer,weixinID+".png",self.sDir+ndir,self.picurl+ndir)
             content=''
             paginationtype = 2
             groupids_view = ""
@@ -167,6 +174,8 @@ class Getshow(object):
         content=self.database.conn.escape(self.content) #这里对内容进行转义,提交变量时不用加'，因为后面转义过后会自动加引号
         catid=self.tocatid #保存到的栏目
         wxid=self.wxid
+        ndir=time.strftime("%Y/%m%d/")
+        thumb=self.getimg(self.thumb,self.random_str(6)+".jpg",self.sDir+"thumb/"+ndir,self.picurl+"thumb/"+ndir) #下载图片
         typeid=0
         tags=jieba.analyse.extract_tags(self.title, 6)
         keywords=(",".join(tags))
@@ -176,8 +185,8 @@ class Getshow(object):
         status=99
         username='admin'
         inputtime=updatetime=int(time.time())
-        insertbooksql ="insert into v9_news (title,catid,wxid,typeid,keywords,description,url,listorder,status,username,inputtime,updatetime) VALUES ( '{title}',{catid},{wxid},{typeid}, '{keywords}', '{description}', '{url}',{listorder},{status}, '{username}', '{inputtime}', '{updatetime}')"
-        insert1 = insertbooksql.format(title=title, catid=catid,wxid=wxid, typeid=typeid, keywords=keywords, description=description,url=url,listorder=listorder,status=status,username=username,inputtime=inputtime,updatetime=updatetime)
+        insertbooksql ="insert into v9_news (title,catid,wxid,thumb,typeid,keywords,description,url,listorder,status,username,inputtime,updatetime) VALUES ( '{title}',{catid},{wxid}, '{thumb}',{typeid}, '{keywords}', '{description}', '{url}',{listorder},{status}, '{username}', '{inputtime}', '{updatetime}')"
+        insert1 = insertbooksql.format(title=title, catid=catid,wxid=wxid,thumb=thumb, typeid=typeid, keywords=keywords, description=description,url=url,listorder=listorder,status=status,username=username,inputtime=inputtime,updatetime=updatetime)
         print(insert1)
         try:#这是用到了事务处理
             self.database.cur.execute(insert1)
@@ -198,8 +207,9 @@ class Getshow(object):
             # database.conn.close()
             self.database.conn.rollback()
 
-
-    def getimg(self,imgUrl,filename,tourl):
+    # 获取远程图片保存到本地，返回图片网址
+    # imgUrl：要下载的远程图片 filename:保存的图片名 tourl:要保存的本地目录 neturl:图片网址
+    def getimg(self,imgUrl,filename,tourl,neturl):
         if filename:
             local_filename=filename
         else:
@@ -227,7 +237,23 @@ class Getshow(object):
                 print("图片下载出错")
                 f.close()
                 return
-        return tourl+local_filename
+        return neturl+local_filename
+
+    # 生成num位随机字符串
+    def random_str(self,num):
+        li = []
+        for i in range(int(num)):
+            r = random.randrange(0,5)
+            if i == r:
+                num = random.randrange(0,10)
+                li.append(str(num))
+            else:
+                temp = random.randrange(65,91)
+                c = chr(temp)
+                li.append(c)
+        result = "".join(li)
+        return result
+
 #栏目页 http://www.vccoo.com/category/?id=104&page=2
 class Getlist(object):
     #tocatid保存到的栏目id
@@ -288,31 +314,37 @@ class Getlist(object):
                 self.next_page()
 
 # 测试
-s = Getshow('324d22')
-print(s.title)
-# print(s.content)
-print(s.wxlogo)
-# print(s.wxname)
-print(s.wxh)
-# # print(s.addtime)
-# print(s.wxurl)
-print(s.wxer)
+# s = Getshow('324d22')
+# print(s.title)
+# # print(s.content)
+# print(s.wxlogo)
+# # print(s.wxname)
+# print(s.wxh)
+# # # print(s.addtime)
+# # print(s.wxurl)
+# print(s.wxer)
 
+# logo图：http://imgs.najiaoluo.com/2016/0905/20160905093606536.jpg
+# 缩略图：http://imgs.najiaoluo.com/thumb/2016/0908/tmp_57d1074cca5a9.jpg
 
-print(s.getimg(s.wxlogo,s.wxh+'.png','d:/img/a/'))
-print(s.getimg(s.wxer,s.wxh+'2.png','d:/img/a/'))
+# import time
+# print(s.getimg(s.wxlogo,s.wxh+"_logo.png","d:/uploadfile/"+time.strftime("%Y/%m%d/"),"http://imgs.najiaoluo.com/"+time.strftime("%Y/%m%d/")))
+# print(s.getimg(s.wxer,s.wxh+".png","d:/uploadfile/"+time.strftime("%Y/%m%d/"),"http://imgs.najiaoluo.com/"+time.strftime("%Y/%m%d/")))
+# print(s.random_str(6))
+# print(s.thumb)
+
 # s=Getlist(104)
 # for url in s.urls:
 #     show =Getshow(url.split('/')[-1])
 #     print(show.title+':'+url)
 
 
-# s=Getlist(121,3,1,6)
+s=Getlist(104,6,1)
 # # if not s.has_next_page:
 # #     print('没有下一页')
 # # else:
 # #     print('有下一页')
-# s.crawl_all_pages()
+s.crawl_all_pages()
 
 # 还要解决：
 #1、数据库转义提交
